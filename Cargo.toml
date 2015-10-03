@@ -1,0 +1,9 @@
+[package]
+name = "alternate-future"
+description = "Simple promise/future library with continuations that don't block."
+version = "0.1.0"
+authors = ["Jameson Ernst <j.patrick.ernst@gmail.com>"]
+license = "MIT"
+repository = ""
+
+
