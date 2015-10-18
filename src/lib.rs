@@ -2,13 +2,19 @@
 
 #![feature(fnbox)]
 
+extern crate spin;
+extern crate num_cpus;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::{self, Thread};
 use std::boxed::FnBox;
 use std::mem;
 use std::error::Error;
 use std::fmt::{self, Display};
+use spin::Mutex;
+
+
+mod threadpool;
 
 
 pub type AwaitResult <T> = Result<T, AwaitError>;
@@ -39,7 +45,7 @@ impl <T> Promise<T>
     pub fn fulfill (mut self, val : T)
     {
         let store = self.0.take().unwrap();
-        let mut lock = store.lock().unwrap();
+        let mut lock = store.lock();
 
         if let Some(cont) = lock.1.take() {
             if self.1 {
@@ -75,7 +81,7 @@ impl <T> Drop for Promise<T>
     fn drop (&mut self)
     {
         if let Some(store) = self.0.take() {
-            let mut lock = store.lock().unwrap();
+            let mut lock = store.lock();
             lock.0 = PromiseValue::Broken;
             if let Some(ref thread) = lock.2 {
                 thread.unpark();
@@ -128,7 +134,7 @@ impl <T> Future<T>
                 FutureInner::Broken(..) => return FutureState::Broken,
             };
 
-            match store.lock().unwrap().0.take() {
+            match store.lock().0.take() {
                 PromiseValue::Impending => return FutureState::Impending,
                 PromiseValue::Present(val) => FutureInner::Present(val),
                 PromiseValue::Broken => FutureInner::Broken,
@@ -150,7 +156,7 @@ impl <T> Future<T>
             FutureInner::Impending(store) => {
                 loop {
                     {
-                        let mut lock = store.lock().unwrap();
+                        let mut lock = store.lock();
                         match lock.0.take() {
                             PromiseValue::Impending => (),
                             PromiseValue::Present(val) => return Ok(val),
@@ -173,7 +179,7 @@ impl <T> Future<T>
     {
         match self.0 {
             FutureInner::Impending(store) => {
-                let mut lock = store.lock().unwrap();
+                let mut lock = store.lock();
 
                 match lock.0.take() {
                     PromiseValue::Impending => {
