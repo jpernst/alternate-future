@@ -1,19 +1,28 @@
-// Copyright 2015 Jameson Ernst
+// Copyright (c) 2014 The Rust Project Developers
 //
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
-// file at the top-level directory of this distribution and at
-// http://rust-lang.org/COPYRIGHT.
+// Permission is hereby granted, free of charge, to any
+// person obtaining a copy of this software and associated
+// documentation files (the "Software"), to deal in the
+// Software without restriction, including without
+// limitation the rights to use, copy, modify, merge,
+// publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following
+// conditions:
 //
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
-
-//! Abstraction of a thread pool for basic parallelism.
-//! Modified to prevent blocking: If no threads are
-//! currently available to execute the job, a new thread
-//! will be created on demand.
+// The above copyright notice and this permission notice
+// shall be included in all copies or substantial portions
+// of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+// ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+// TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+// PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+// SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+// IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
 
 
 use std::sync::mpsc::{sync_channel, SyncSender, Receiver, TrySendError};
@@ -23,17 +32,18 @@ use std::thread;
 
 trait FnBox
 {
-    fn call_box(self: Box<Self>);
+    fn call_box (self : Box<Self>);
 }
-impl<F: FnOnce()> FnBox for F
+impl <F> FnBox for F
+    where F : FnOnce()
 {
-    fn call_box (self: Box<F>)
+    fn call_box (self : Box<F>)
     {
         (*self)()
     }
 }
 
-type Thunk<'a> = Box<FnBox + Send + 'a>;
+type Thunk <'a> = Box<FnBox + Send + 'a>;
 
 
 struct Sentinel<'a>
@@ -43,7 +53,8 @@ struct Sentinel<'a>
 }
 impl<'a> Sentinel<'a>
 {
-    fn new (jobs : &'a Arc<Mutex<Receiver<Thunk<'static>>>>) -> Sentinel<'a> {
+    fn new (jobs : &'a Arc<Mutex<Receiver<Thunk<'static>>>>) -> Sentinel<'a>
+    {
         Sentinel {
             jobs: jobs,
             active: true
@@ -76,7 +87,7 @@ impl ThreadPool
     {
         assert!(threads >= 1);
 
-        let (tx, rx) = sync_channel::<Thunk<'static>>(threads);
+        let (tx, rx) = sync_channel::<Thunk<'static>>(0);
         let rx = Arc::new(Mutex::new(rx));
 
         for _ in 0..threads {
@@ -86,7 +97,7 @@ impl ThreadPool
         ThreadPool { jobs: tx }
     }
 
-    pub fn execute <F> (&self, job: F)
+    pub fn execute <F> (&self, job : F)
         where F : FnOnce() + Send + 'static
     {
         let job = Box::new(move|| job());

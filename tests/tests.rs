@@ -4,7 +4,7 @@ extern crate alternate_future;
 
 use std::thread;
 use std::cell::Cell;
-use alternate_future::{promise_future, Promise, Future};
+use alternate_future::{promise_future, spawn_future, Future};
 
 
 #[test]
@@ -18,7 +18,7 @@ fn present ()
 
 
 #[test]
-fn fulfil ()
+fn fulfill ()
 {
     let (p, f) = promise_future();
 
@@ -84,6 +84,19 @@ fn chain ()
     }).await().unwrap();
 
     assert_eq!(i, 10);
+}
+
+
+#[test]
+fn spawn ()
+{
+    assert_eq!(
+        spawn_future(|| {
+            thread::sleep_ms(100);
+            12
+        }).await().unwrap(), 
+        12
+    );
 }
 
 

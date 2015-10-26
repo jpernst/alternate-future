@@ -4,6 +4,8 @@
 
 extern crate spin;
 extern crate num_cpus;
+#[macro_use]
+extern crate lazy_static;
 
 use std::sync::Arc;
 use std::thread::{self, Thread};
@@ -11,10 +13,18 @@ use std::boxed::FnBox;
 use std::mem;
 use std::error::Error;
 use std::fmt::{self, Display};
-use spin::Mutex;
+use spin::Mutex as SpinMutex;
+
+use threadpool::ThreadPool;
 
 
 mod threadpool;
+
+
+lazy_static!
+{
+    static ref POOL : SpinMutex<ThreadPool> = SpinMutex::new(ThreadPool::new(num_cpus::get()));
+}
 
 
 pub type AwaitResult <T> = Result<T, AwaitError>;
@@ -23,21 +33,29 @@ pub type AwaitResult <T> = Result<T, AwaitError>;
 pub fn promise_future <T> () -> (Promise<T>, Future<T>)
     where T : Send + 'static
 {
-    let store = Arc::new(Mutex::new((PromiseValue::Impending, None, None)));
+    let store = Arc::new(SpinMutex::new((PromiseValue::Impending, None, None)));
 
     (Promise(Some(store.clone()), false), Future(FutureInner::Impending(store)))
 }
 fn continue_future <T> () -> (Promise<T>, Future<T>)
     where T : Send + 'static
 {
-    let store = Arc::new(Mutex::new((PromiseValue::Impending, None, None)));
+    let store = Arc::new(SpinMutex::new((PromiseValue::Impending, None, None)));
 
     (Promise(Some(store.clone()), true), Future(FutureInner::Impending(store)))
 }
 
+pub fn spawn_future <F, T> (func : F) -> Future<T>
+    where F : FnOnce() -> T + Send + 'static, T : Send + 'static
+{
+    let (p, f) = promise_future();
+    POOL.lock().execute(move|| p.fulfill(func()));
+    f
+}
+
 
 #[must_use]
-pub struct Promise <T> (Option<Arc<Mutex<(PromiseValue<T>, Option<Box<FnBox(T) + Send + 'static>>, Option<Thread>)>>>, bool)
+pub struct Promise <T> (Option<Arc<SpinMutex<(PromiseValue<T>, Option<Box<FnBox(T) + Send + 'static>>, Option<Thread>)>>>, bool)
     where T : Send + 'static;
 impl <T> Promise<T>
     where T : Send + 'static
@@ -51,7 +69,7 @@ impl <T> Promise<T>
             if self.1 {
                 cont.call_box((val,));
             } else {
-                thread::spawn(move|| cont.call_box((val,)));
+                POOL.lock().execute(move|| cont.call_box((val,)));
             }
         } else {
             lock.0 = PromiseValue::Present(val);
@@ -114,7 +132,7 @@ pub struct Future <T> (FutureInner<T>)
 enum FutureInner <T>
     where T : Send + 'static
 {
-    Impending (Arc<Mutex<(PromiseValue<T>, Option<Box<FnBox(T) + Send + 'static>>, Option<Thread>)>>),
+    Impending (Arc<SpinMutex<(PromiseValue<T>, Option<Box<FnBox(T) + Send + 'static>>, Option<Thread>)>>),
     Present   (T),
     Broken,
 }
