@@ -149,7 +149,7 @@ impl <T> Future<T>
             let store = match self.0 {
                 FutureInner::Impending(ref mut store) => store,
                 FutureInner::Present(..) => return FutureState::Present,
-                FutureInner::Broken(..) => return FutureState::Broken,
+                FutureInner::Broken => return FutureState::Broken,
             };
 
             match store.lock().0.take() {
